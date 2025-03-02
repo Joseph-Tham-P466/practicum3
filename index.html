@@ -1,0 +1,240 @@
+<html lang="en">
+<head>
+</head>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    button:hover {
+        background-color: #45a049;
+    }
+    button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+    }
+    .result {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 4px;
+    }
+    .success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .info {
+        background-color: #e2f3fd;
+        color: #0c5460;
+    }
+    .hidden {
+        display: none;
+    }
+
+</style>
+
+<body>
+<div class="container">
+    <h1>Prime Number Checker</h1>
+
+    <!-- Login Section -->
+    <div id="loginSection" class="card">
+        <h2>Login</h2>
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="Enter username">
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Enter password">
+        </div>
+        <button id="loginButton">Login</button>
+        <div id="loginResult" class="result hidden"></div>
+    </div>
+
+    <!-- Prime Checker Section (Initially Hidden) -->
+    <div id="primeCheckerSection" class="card hidden">
+        <h2>Check if a Number is Prime</h2>
+        <div class="form-group">
+            <label for="numberInput">Enter a number:</label>
+            <input type="number" id="numberInput" min="1" placeholder="Enter a positive integer">
+        </div>
+        <button id="checkButton">Check Prime</button>
+        <div id="primeResult" class="result hidden"></div>
+        <button id="logoutButton">Logout</button>
+    </div>
+</div>
+</body>
+
+<script>
+    // API base URL
+    const API_BASE_URL = 'http://localhost:4001';
+
+    // Global variable to store the authentication token
+    let authToken = null;
+
+    // DOM Elements
+    const loginSection = document.getElementById('loginSection');
+    const primeCheckerSection = document.getElementById('primeCheckerSection');
+    const loginButton = document.getElementById('loginButton');
+    const logoutButton = document.getElementById('logoutButton');
+    const checkButton = document.getElementById('checkButton');
+    const loginResult = document.getElementById('loginResult');
+    const primeResult = document.getElementById('primeResult');
+
+    // Event Listeners
+    loginButton.addEventListener('click', handleLogin);
+    logoutButton.addEventListener('click', handleLogout);
+    checkButton.addEventListener('click', checkPrimeNumber);
+
+    // Login Function
+    async function handleLogin() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        if (!username || !password) {
+            showResult(loginResult, 'Please enter both username and password', 'error');
+            return;
+        }
+
+        try {
+            loginButton.disabled = true;
+            showResult(loginResult, 'Logging in...', 'info');
+
+            const response = await fetch(`${API_BASE_URL}/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Login failed: ${response.status} ${response.statusText}`);
+            }
+
+            authToken = await response.text();
+
+
+            // Show success message and switch to prime checker section
+            showResult(loginResult, 'Login successful!', 'success');
+            setTimeout(() => {
+                loginSection.classList.add('hidden');
+                primeCheckerSection.classList.remove('hidden');
+            }, 1000);
+        } catch (error) {
+            showResult(loginResult, error.message, 'error');
+            loginButton.disabled = false;
+        }
+    }
+
+    // Logout Function
+    function handleLogout() {
+        authToken = null;
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        document.getElementById('numberInput').value = '';
+
+        primeCheckerSection.classList.add('hidden');
+        loginSection.classList.remove('hidden');
+        loginResult.classList.add('hidden');
+        loginButton.disabled = false;
+    }
+
+    // Check Prime Function
+    async function checkPrimeNumber() {
+        const numberInput = document.getElementById('numberInput');
+        const number = numberInput.value;
+
+        if (!number || number <= 0 || !Number.isInteger(parseFloat(number))) {
+            showResult(primeResult, 'Please enter a positive integer', 'error');
+            return;
+        }
+
+        if (!authToken) {
+            showResult(primeResult, 'Not authenticated. Please login again.', 'error');
+            handleLogout();
+            return;
+        }
+
+        try {
+            checkButton.disabled = true;
+            showResult(primeResult, 'Checking...', 'info');
+
+            const response = await fetch(`${API_BASE_URL}/primes/${number}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            if (response.status === 401) {
+                throw new Error('Authentication expired. Please login again.');
+            }
+
+            if (!response.ok) {
+                throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const message = data
+                ? `${number} is a prime number!`
+                : `${number} is not a prime number.`;
+
+            showResult(primeResult, message, 'success');
+        } catch (error) {
+            showResult(primeResult, error.message, 'error');
+            if (error.message.includes('Authentication expired')) {
+                handleLogout();
+            }
+        } finally {
+            checkButton.disabled = false;
+        }
+    }
+
+    // Helper function to display results
+    function showResult(element, message, type) {
+        element.textContent = message;
+        element.className = 'result ' + type;
+        element.classList.remove('hidden');
+    }
+</script>
+</html>
